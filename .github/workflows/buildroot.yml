@@ -1,0 +1,92 @@
+#
+# Copyright (C) 2022 Ing <https://github.com/wjz304>
+#
+# This is free software, licensed under the MIT License.
+# See /LICENSE for more information.
+#
+
+name: Buildroot
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "version"
+        default: "2023.02.x"
+        type: string
+jobs:
+  buildroot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+        #with:
+        #  lfs: 'true'
+
+      - name: Initialization environment
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          sudo timedatectl set-timezone "Asia/Shanghai"
+
+          # Clean up disk space
+          docker rmi $(docker images -q)
+          sudo apt update
+          sudo apt -y purge azure-cli* docker* llvm* google* dotnet* powershell* sphinxsearch* mysql* php* 
+          sudo apt -y full-upgrade
+
+          sudo apt update
+          sudo apt install -y jq gawk cpio gettext libelf-dev qemu-utils 
+          sudo snap install yq
+          
+          df -h
+          
+      - name: Build buildroot
+        run: |
+          git clone https://oauth2:${{ secrets.ACTION }}@github.com/wjz304/rp-buildroot.git
+          
+          BR_VERSION="${{ inputs.version }}"
+
+          git clone --single-branch -b ${BR_VERSION} https://github.com/buildroot/buildroot.git .buildroot
+
+          cp -Ru rp-buildroot/rr/* .buildroot/
+
+          cd .buildroot/
+
+          echo "Generating default config"
+          make BR2_EXTERNAL=./external -j$(nproc) rr_defconfig
+          
+          echo "Download sources if not cached"
+          make BR2_EXTERNAL=./external -j$(nproc) source
+          
+          echo "Prepare buildroot for first make"
+          make BR2_EXTERNAL=./external -j$(nproc)
+
+          [ ! -f "output/images/bzImage" ] && exit 1
+          [ ! -f "output/images/rootfs.cpio.xz" ] && exit 1
+          
+          BUILDROOT_VERSION="$(grep ' BR2_VERSION :=' Makefile | cut -d '=' -f2 | tr -d ' ')"
+          KERNEL_VERSION="$(grep BR2_LINUX_KERNEL_VERSION .config | cut -d'=' -f2 | tr -d '"')"
+          echo "BUILDROOT_VERSION=${BUILDROOT_VERSION}" >> $GITHUB_ENV
+          echo "KERNEL_VERSION=${KERNEL_VERSION}" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: buildroot
+          path: |
+            .buildroot/output/images/bzImage
+            .buildroot/output/images/rootfs.cpio.xz
+
+      # Publish a release if is a tag
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.version }}
+          files: |
+            .buildroot/output/images/bzImage
+            .buildroot/output/images/rootfs.cpio.xz
+          body: |
+            Buildroot version: ${{ env.BUILDROOT_VERSION }}
+            Kernel version: ${{ env.KERNEL_VERSION }}
