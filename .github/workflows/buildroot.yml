@@ -48,9 +48,12 @@ jobs:
           BR_VERSION="${{ inputs.version }}"
 
           git clone --single-branch -b ${BR_VERSION} https://github.com/buildroot/buildroot.git .buildroot
+          
+          git clone https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git linux-firmware
 
           cp -Ru rp-buildroot/rr/* .buildroot/
-
+          cp -Ru linux-firmware .buildroot/
+          
           cd .buildroot/
 
           echo "Generating default config"
