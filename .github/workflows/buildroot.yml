@@ -43,7 +43,7 @@ jobs:
           
       - name: Build buildroot
         run: |
-          git clone https://oauth2:${{ secrets.ACTION }}@github.com/wjz304/rp-buildroot.git
+          # git clone https://oauth2:${{ secrets.ACTION }}@github.com/wjz304/rp-buildroot.git
           
           BR_VERSION="${{ inputs.version }}"
 
